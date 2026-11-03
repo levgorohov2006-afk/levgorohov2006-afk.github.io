@@ -1,0 +1,52 @@
+name: Стихи из Telegram
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"   # каждый понедельник, 10:00 по Москве
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "pr — открыть PR на проверку, push — сразу на сайт"
+        default: pr
+        type: choice
+        options: [pr, push]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency: tg-import
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install telethon==1.36.0
+      - name: Забрать посты #стихи
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          TG_SESSION: ${{ secrets.TG_SESSION }}
+          TG_CHANNEL: ${{ secrets.TG_CHANNEL }}
+          REPORT_FILE: ${{ runner.temp }}/report.md
+        run: python tools/tg_import.py
+      - name: Сразу на сайт
+        if: ${{ github.event_name == 'schedule' || inputs.mode == 'push' }}
+        run: |
+          git diff --quiet && exit 0
+          git config user.name "tg-import"
+          git config user.email "tg-import@users.noreply.github.com"
+          git commit -am "Стихи из Telegram: $(date +%F)"
+          git push
+      - name: PR на проверку
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'pr' }}
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: tg-import/${{ github.run_id }}
+          title: "Стихи из Telegram (проверка)"
+          commit-message: "Стихи из Telegram: проверочный прогон"
+          body-path: ${{ runner.temp }}/report.md
