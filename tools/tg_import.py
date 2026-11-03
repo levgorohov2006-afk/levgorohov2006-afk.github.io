@@ -168,7 +168,7 @@ async def main():
 
     found = []
     async for msg in client.iter_messages(chan, limit=limit):
-        if msg.message and TAG in msg.message.lower():
+        if msg.message and TAG in msg.message.lower() and not msg.fwd_from:  # пересланные из других каналов не берём
             found.append(msg)
     found.reverse()  # от старых к новым
 
